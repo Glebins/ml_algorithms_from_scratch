@@ -14,9 +14,17 @@ def generate_weights(size):
     return pd.Series([1] * size)  # naive implementation
 
 
+def construct_X(X):
+    return pd.DataFrame(data=np.array(X).T)
+
+
+def construct_y(y):
+    return pd.Series(y)
+
+
 class LinearReg:
     def __init__(self, n_iter=100, learning_rate=0.1, metric=None, reg=None, l1_coef=0, l2_coef=0, sgd_sample=None,
-                 random_state=42):
+                 random_state=42, train_X=None, train_y=None):
         self.n_iter = n_iter
         self.learning_rate = learning_rate
         self.metric_type = metric
@@ -26,18 +34,24 @@ class LinearReg:
         self.sgd_sample = sgd_sample if sgd_sample is not None else 1.0
         self.random_state = random_state
 
+        if train_X is not None:
+            train_X = add_column_of_ones(train_X)
+
+        self.__train_X = train_X
+        self.__train_y = train_y
+
         self.weights = None
         self.__metric_value = None
         self.__loss = 0
 
-    def fit(self, X: pd.DataFrame, y: pd.Series, verbose=False):
+    def fit(self, verbose=False):
         random.seed(self.random_state)
 
-        dimension_size = len(X.columns.values)
-        number_points = len(X.index.values)
+        dimension_size = len(self.__train_X.columns.values)
+        number_points = len(self.__train_X.index.values)
 
-        X_original = add_column_of_ones(X)
-        y_original = y.copy()
+        X_original = self.__train_X.copy()
+        y_original = self.__train_y.copy()
 
         self.weights = generate_weights(dimension_size + 1)
 
@@ -59,11 +73,11 @@ class LinearReg:
             self.weights += delta_weights
 
             if verbose and (i == 1 or i % verbose == 0 or i == self.n_iter):
-                self.__metric_value = self.get_metric(X @ self.weights, y_original)
+                self.__metric_value = self.__get_metric_value(X @ self.weights, y_original)
                 self.__debug_while_fit(i)
 
-        y_predicted = X @ self.weights
-        self.__metric_value = self.get_metric(y_predicted, y_original)
+        y_predicted = self.__train_X @ self.weights
+        self.__metric_value = self.__get_metric_value(y_predicted, y_original)
 
     def calculate_reg_loss(self):
         if self.reg_type == 'l1':
@@ -85,7 +99,7 @@ class LinearReg:
         else:
             return 0
 
-    def get_metric(self, y_hat, y):
+    def __get_metric_value(self, y_hat, y):
         if self.metric_type == 'mae':
             metric_value = (y_hat - y).abs().sum() / len(y)
         elif self.metric_type == 'mse':
@@ -101,10 +115,8 @@ class LinearReg:
 
         return metric_value
 
-    def predict(self, X: pd.DataFrame):
-        X = add_column_of_ones(X)
-
-        return X @ self.weights
+    def predict(self):
+        return self.__train_X @ self.weights
 
     def get_best_score(self):
         return self.__metric_value if self.metric_type is not None else self.__loss
@@ -126,24 +138,58 @@ class LinearReg:
 
         return X_, y_
 
-    @staticmethod
-    def get_solution(X: pd.DataFrame, y: pd.Series):
-        X = add_column_of_ones(X)
-        tmp = X.T @ X
+    def get_solution(self):
+        tmp = self.__train_X.T @ self.__train_X
         inv_tmp = pd.DataFrame(np.linalg.inv(tmp), tmp.columns, tmp.index)
-        beta = inv_tmp @ X.T @ y
+        beta = inv_tmp @ self.__train_X.T @ self.__train_y
+        self.weights = beta
 
         return beta
 
-    def get_metric_for_ideal_solution(self, X, y):
-        self.weights = self.get_solution(X, y)
-        X = add_column_of_ones(X)
-        y_hat = X @ self.weights
+    def get_metric(self):
+        y_hat = self.__train_X @ self.weights
 
-        return f"{self.metric_type} = {self.get_metric(y_hat, y)}"
+        return self.metric_type, self.__get_metric_value(y_hat, self.__train_y)
+
+    def get_pretty_string_of_points(self, in_a_row=True, include_zero=False, columns=None):
+        result = ('[' if in_a_row else '')
+        delimiter = (', ' if in_a_row else '\n')
+        end_symbol = (']' if in_a_row else '')
+
+        for i in range(self.__train_X.shape[0]):
+            result += '('
+            # end_of_cycle = 2 if is_one_variable else self.__train_X.shape[1]
+            cols_to_iterate = (range(self.__train_X.shape[1]) if include_zero else range(1, self.__train_X.shape[1])) \
+                if columns is None else columns
+            for j in cols_to_iterate:
+                result += str(self.__train_X.iloc[i, j])
+                result += ', '
+            result += str(self.__train_y[i]) + ')' + delimiter
+        result = result[:-len(delimiter)]
+        result += end_symbol
+
+        return result
+
+    def get_pretty_str_of_result(self, variables=None, round_to=None):
+        if variables is None:
+            if len(self.weights) == 2:
+                variables = ['y', 'x']
+            elif len(self.weights) == 3:
+                variables = ['z', 'x', 'y']
+            else:
+                variables = ['y'] + [f'x{i}' for i in range(len(self.weights))]
+
+        rounded_weights = round(self.weights, round_to) if round_to is not None else self.weights
+
+        tmp = ([f"{coefficient} * {variable}" for coefficient, variable in zip(rounded_weights[1:], variables[1:])] +
+               [str(rounded_weights[0])])
+
+        res = f"{variables[0]} = {' + '.join(tmp)}"
+
+        return res
 
     def __str__(self):
-        res_str = "LinearReg class: "
+        res_str = f"{self.__class__.__name__} class: "
         for key, value in self.__dict__.items():
             if key.startswith("_"):
                 continue
@@ -153,7 +199,7 @@ class LinearReg:
         return res_str
 
     def __repr__(self):
-        res_str = "LinearReg("
+        res_str = f"{self.__class__.__name__}("
 
         for key, value in self.__dict__.items():
             if key.startswith("_"):
@@ -164,6 +210,24 @@ class LinearReg:
         res_str += ")"
 
         return res_str
+
+    @property
+    def train_X(self):
+        return self.__train_X
+
+    @train_X.setter
+    def train_X(self, value):
+        if value is not None:
+            value = add_column_of_ones(value)
+        self.__train_X = value
+
+    @property
+    def train_y(self):
+        return self.__train_y
+
+    @train_y.setter
+    def train_y(self, value):
+        self.__train_y = value
 
     def get_coef(self):
         return self.weights.to_numpy()[1:]

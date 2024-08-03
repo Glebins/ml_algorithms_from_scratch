@@ -1,59 +1,32 @@
 import pandas as pd
 import numpy as np
+import math
 
-import linear_regression
 from linear_regression import *
 
 
-def pretty_print_points(X, y):
-    res = ''
-    for i in range(len(X.index.values)):
-        res += '('
-        for j in range(len(X.columns.values)):
-            res += f"{X.iloc[i, j]}, "
-        res += str(y.iloc[i])
-        res += ')\n'
-
-    res = res[:-2]
-    res += ')'
-    return res
+def func(xx):
+    return np.array(round(0.1 * np.log(np.sin(xx[0])) + 0.7, 3))
 
 
-lin_reg = LinearReg(n_iter=100000, learning_rate=0.0001, metric='r2', l1_coef=1, l2_coef=0.1, reg='l1')
+X = construct_X([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, math.pi / 2, 2, 2.3, 2.5, 2.7, 3])
+y = construct_y([0.47, 0.538, 0.578, 0.606, 0.626, 0.643, 0.656, 0.667, 0.7, 0.69, 0.671, 0.649, 0.615, 0.504])
 
-np.random.seed(42)
+X[0] = np.log(np.sin(X[0]))
 
-# X = pd.DataFrame(data=np.array([[1, 2, 3, 4], [3, 4, 1, 4]]).T)
-# y = pd.Series([2, 3, 1, 4])
-X = pd.DataFrame(data=np.random.randint(100, size=(10, 2)))
-y = pd.Series(np.random.randint(100, size=(10,)))
+lin_reg = LinearReg(metric='r2')
 
-print(X, y, sep='\n\n', end='\n\n')
+lin_reg.train_X = X
+lin_reg.train_y = y
 
-print(pretty_print_points(X, y))
+# todo applying functions as a class method
 
-lin_reg.fit(X, y, verbose=10000)
-print('\n', lin_reg.get_weights(), sep='', end='\n\n')
+weights_ideal = lin_reg.get_solution()
 
-res_str = "z = "
-chrs = ['', ' * x', ' * y']
+print(lin_reg.get_metric())
 
-for coef, chr in zip(lin_reg.get_weights(), chrs):
-    res_str += f"{round(coef, 3)}{chr} + "
+print(lin_reg.get_pretty_string_of_points(in_a_row=True, include_zero=True))
 
-res_str = res_str[:-3]
-print(res_str, end='\n\n')
+print(lin_reg.get_pretty_str_of_result(round_to=3, variables=['y', 'x', 'x ^ 2']))
 
-beta_ideal = lin_reg.get_solution(X, y)
-print(beta_ideal, end='\n\n')
-
-res_str = "z = "
-chrs = ['', ' * x', ' * y']
-
-for coef, chr in zip(beta_ideal, chrs):
-    res_str += f"{round(coef, 3)}{chr} + "
-
-res_str = res_str[:-3]
-print(res_str)
-
-print(lin_reg.get_metric_for_ideal_solution(X, y))
+print(lin_reg.weights)
