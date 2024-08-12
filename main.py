@@ -2,31 +2,15 @@ import pandas as pd
 import numpy as np
 import math
 
-from linear_regression import *
+from decision_trees_classification import *
 
+np.random.seed(42)
 
-def func(xx):
-    return np.array(round(0.1 * np.log(np.sin(xx[0])) + 0.7, 3))
+X = pd.DataFrame(np.round(np.random.random((5, 4)), 1))
+y = pd.Series(np.random.randint(0, 2, size=50))
 
+print(X, end="\n\n")
 
-X = construct_X([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, math.pi / 2, 2, 2.3, 2.5, 2.7, 3])
-y = construct_y([0.47, 0.538, 0.578, 0.606, 0.626, 0.643, 0.656, 0.667, 0.7, 0.69, 0.671, 0.649, 0.615, 0.504])
+tree_clf = MyTreeClf()
 
-X[0] = np.log(np.sin(X[0]))
-
-lin_reg = LinearReg(metric='r2')
-
-lin_reg.train_X = X
-lin_reg.train_y = y
-
-# todo applying functions as a class method
-
-weights_ideal = lin_reg.get_solution()
-
-print(lin_reg.get_metric())
-
-print(lin_reg.get_pretty_string_of_points(in_a_row=True, include_zero=True))
-
-print(lin_reg.get_pretty_str_of_result(round_to=3, variables=['y', 'x', 'x ^ 2']))
-
-print(lin_reg.weights)
+print(get_best_split(X, y))
