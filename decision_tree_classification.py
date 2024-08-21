@@ -14,19 +14,11 @@ class Tree:
         self.is_leaf = is_leaf
         self.first_class_prob = None
 
-    def add_node(self, is_left: bool = None):
-        if is_left is None:
-            self.left = Tree()
-            self.right = Tree()
-            self.left.__depth = self.__depth + 1
-            self.right.__depth = self.__depth + 1
-        else:
-            if is_left:
-                self.right = Tree()
-                self.right.__depth = self.__depth + 1
-            else:
-                self.left = Tree()
-                self.left.__depth = self.__depth + 1
+    def add_node(self):
+        self.left = Tree()
+        self.right = Tree()
+        self.left.__depth = self.__depth + 1
+        self.right.__depth = self.__depth + 1
 
     def __str__(self):
         result = ""
@@ -95,7 +87,7 @@ def get_gini_coefficient_of_col(column: pd.Series):
     return gini
 
 
-def get_best_split(X: pd.DataFrame, y: pd.Series, delimiters, criterion):
+def get_best_split(X: pd.DataFrame, y: pd.Series, delimiters, criterion, bins, recalc_every_step):
     criterion_function = get_entropy_of_col if criterion == 'entropy' else get_gini_coefficient_of_col
 
     best_params = {'col_name': None, 'split_value': None, 'ig': 0}
@@ -108,6 +100,9 @@ def get_best_split(X: pd.DataFrame, y: pd.Series, delimiters, criterion):
         # for i in range(len(unique_values) - 1):
         #     mean_i = (unique_values[i] + unique_values[i + 1]) / 2
         #     delimiters.append(mean_i)
+
+        if recalc_every_step:
+            delimiters = split_into_delimiters(X, bins)
 
         len_objects = len(X[column_i])
 
@@ -136,17 +131,55 @@ def get_best_split(X: pd.DataFrame, y: pd.Series, delimiters, criterion):
     return [best_params['col_name'], best_params['split_value'], best_params['ig']]
 
 
+def split_into_delimiters(X: pd.DataFrame, bins):
+    delimiters = {}
+
+    for column_i in X:
+        unique_values = sorted(X[column_i].unique())
+
+        if bins is not None and bins < len(unique_values):
+            delimiters_i = split_using_histogram(unique_values, bins)
+
+        else:
+            delimiters_i = split_using_own_values(unique_values)
+        delimiters[column_i] = delimiters_i
+
+    return delimiters
+
+
+def split_using_histogram(unique_values, bins):
+    _, delimiters_i = np.histogram(unique_values, bins=bins)
+    delimiters_i = delimiters_i[1:-1]
+
+    return delimiters_i
+
+
+def split_using_own_values(unique_values):
+    delimiters_i = []
+    for i in range(len(unique_values) - 1):
+        mean_i = (unique_values[i] + unique_values[i + 1]) / 2
+        delimiters_i.append(mean_i)
+    return delimiters_i
+
+
 class MyTreeClf:
-    def __init__(self, max_depth=5, min_samples_split=2, max_leafs=20, bins=None, criterion='entropy'):
+    def __init__(self, max_depth=5, min_samples_split=2, max_leafs=20, bins=None, criterion='entropy',
+                 recalc_every_step=False):
         self.max_depth = max_depth
         self.min_samples_split = min_samples_split
         self.max_leafs = max_leafs
         self.bins = bins
         self.criterion = criterion
+        self.recalc_every_step = recalc_every_step
         self.__test_criterion()
 
-        self.tree = Tree()
+        # todo delete after the course
+        if self.bins is None:
+            self.recalc_every_step = True
+
+        self.remaining_leaves = 2
         self.leafs_cnt = 0
+        self.tree = Tree()
         self.fi = {}
 
         self.__delimiters = None
@@ -160,7 +193,7 @@ class MyTreeClf:
             return False
         if len(y.unique()) == 1:
             return True
-        if self.leafs_cnt > self.max_leafs - 2:
+        if self.remaining_leaves + self.leafs_cnt > self.max_leafs:
             return True
         if len(y) < self.min_samples_split:
             return True
@@ -169,9 +202,9 @@ class MyTreeClf:
         return False
 
     def __handle_node_as_node(self, X: pd.DataFrame, y: pd.Series, node: Tree):
-        col_name, split_value, gain_metric = get_best_split(X, y, self.__delimiters, self.criterion)
+        col_name, split_value, gain_metric = get_best_split(X, y, self.__delimiters, self.criterion, self.bins, self.recalc_every_step)
 
-        # todo make a human check
+        # make a human check (the same elements in bins)
         if col_name is None:
             return self.__handle_node_as_leaf(X, y, node)
 
@@ -200,62 +233,42 @@ class MyTreeClf:
             return None
         return self.__handle_node_as_node(X, y, node)
 
-    def split_into_delimiters(self, X: pd.DataFrame):
-        delimiters = {}
+    def pre_fit(self, X: pd.DataFrame):
+        self.fi.clear()
+        for col_i in X:
+            self.fi[col_i] = 0
 
-        for column_i in X:
-            unique_values = sorted(X[column_i].unique())
+        if not self.recalc_every_step:
+            self.__delimiters = split_into_delimiters(X, self.bins)
 
-            if self.bins is not None and self.bins < len(unique_values):
-                delimiters_i = self.__split_using_histogram(unique_values)
+    def post_fit(self, X: pd.DataFrame):
+        for col_i in self.fi:
+            self.fi[col_i] /= len(X)
 
-            else:
-                delimiters_i = self.__split_using_own_values(unique_values)
-            delimiters[column_i] = delimiters_i
-
-        return delimiters
-
-    def __split_using_histogram(self, unique_values):
-        _, delimiters_i = np.histogram(unique_values, bins=self.bins)
-        delimiters_i = delimiters_i[1:-1]
-
-        return delimiters_i
-
-    def __split_using_own_values(self, unique_values):
-        delimiters_i = []
-        for i in range(len(unique_values) - 1):
-            mean_i = (unique_values[i] + unique_values[i + 1]) / 2
-            delimiters_i.append(mean_i)
-        return delimiters_i
-
-    def fit(self, X: pd.DataFrame, y: pd.Series, node=None):
-        # todo reorganize, create prefit, remove node from here, make splitting not only in yhe beginning
-        if node is None:
-            self.fi.clear()
-            for col_i in X:
-                self.fi[col_i] = 0
-
-            self.__delimiters = self.split_into_delimiters(X)
-            node = self.tree
-
-        handling_result = self.handle_node(X, y, node)
-        if handling_result is None:
+    def fitting_process(self, X: pd.DataFrame, y: pd.Series, node):
+        processing_result = self.handle_node(X, y, node)
+        if processing_result is None:
             return
 
-        X_left, y_left, X_right, y_right = handling_result
+        X_left, y_left, X_right, y_right = processing_result
 
-        self.fit(X_left, y_left, node.left)
-        self.fit(X_right, y_right, node.right)
+        self.remaining_leaves += 1
+        self.fitting_process(X_left, y_left, node.left)
+        self.remaining_leaves -= 1
+        self.fitting_process(X_right, y_right, node.right)
 
-        if node == self.tree:
-            for col_i in self.fi:
-                self.fi[col_i] /= len(X)
+    def fit(self, X: pd.DataFrame, y: pd.Series):
+        node_start = self.tree
+
+        self.pre_fit(X)
+        self.fitting_process(X, y, node_start)
+        self.post_fit(X)
 
     def print_tree(self):
         print(self.tree)
 
     def predict_proba(self, X: pd.DataFrame):
-        all_the_ress = []
+        predictions = []
 
         for row in X.iterrows():
             node = self.tree
@@ -265,12 +278,12 @@ class MyTreeClf:
                 else:
                     node = node.left
 
-            all_the_ress.append(node.first_class_prob)
+            predictions.append(node.first_class_prob)
 
-        return all_the_ress
+        return predictions
 
     def predict(self, X: pd.DataFrame):
-        all_the_ress = []
+        predictions = []
 
         for row in X.iterrows():
             node = self.tree
@@ -280,9 +293,9 @@ class MyTreeClf:
                 else:
                     node = node.left
 
-            all_the_ress.append(1 if node.first_class_prob > 0.5 else 0)
+            predictions.append(1 if node.first_class_prob > 0.5 else 0)
 
-        return all_the_ress
+        return predictions
 
     def __str__(self):
         res_str = f"{self.__class__.__name__} class: "

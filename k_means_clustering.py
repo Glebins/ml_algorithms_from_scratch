@@ -14,7 +14,7 @@ class MyKMeans:
         for key, value in self.__dict__.items():
             if key.startswith("_"):
                 continue
-            res_str += f"{key} = {value}, "
+            res_str += f"{key}={value}, "
 
         res_str = res_str[:-2]
         return res_str

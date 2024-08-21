@@ -53,7 +53,7 @@ class LinearReg:
         X_original = self.__train_X.copy()
         y_original = self.__train_y.copy()
 
-        self.weights = generate_weights(dimension_size + 1)
+        self.weights = generate_weights(dimension_size)
 
         for i in range(1, self.n_iter + 1):
             X, y = self.__get_batch(X_original, y_original)
