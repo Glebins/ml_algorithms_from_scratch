@@ -6,7 +6,7 @@ class MyDBSCAN:
     def __init__(self, eps=3, min_samples=3, metric='euclidean'):
         self.eps = eps
         self.min_samples = min_samples
-        self.distance_metric = metric
+        self.distance_metric_type = metric
 
         self.__points_info = []
         self.clusters_number = 0
@@ -79,13 +79,13 @@ class MyDBSCAN:
         return neighbors
 
     def find_distance(self, X: np.array, point):
-        if self.distance_metric == 'euclidean':
+        if self.distance_metric_type == 'euclidean':
             dists = np.sqrt(np.sum((X - point) ** 2, axis=-1))
-        elif self.distance_metric == 'chebyshev':
+        elif self.distance_metric_type == 'chebyshev':
             dists = np.max(np.abs(X - point), axis=-1)
-        elif self.distance_metric == 'manhattan':
+        elif self.distance_metric_type == 'manhattan':
             dists = np.sum(np.abs(X - point), axis=-1)
-        elif self.distance_metric == 'cosine':
+        elif self.distance_metric_type == 'cosine':
             dists = np.sum(X * point, axis=-1)
             norm1 = np.linalg.norm(X, ord=2, axis=1)
             norm2 = np.linalg.norm(point, ord=2)

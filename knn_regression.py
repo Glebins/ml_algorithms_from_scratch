@@ -1,6 +1,5 @@
 import pandas as pd
 import numpy as np
-import itertools
 
 
 class KNNReg:
@@ -48,23 +47,34 @@ class KNNReg:
         predictions = np.zeros(num_test, dtype='float')
 
         for i in range(num_test):
-            distances = dict(zip(dists[i], self.train_y))
-            distances = dict(sorted(distances.items()))
-            distances_k = dict(itertools.islice(distances.items(), self.k))
+            distances_to_neighbors = dists[i]
+            sorted_indices = distances_to_neighbors.argsort()
+            distances_to_neighbors = distances_to_neighbors[sorted_indices][:self.k]
 
-            predictions[i] = self.get_weighted_verdict(distances_k)
+            neighbors_values = self.train_y.to_numpy()
+            neighbors_values = neighbors_values[sorted_indices][:self.k]
+
+            # print(distances_to_neighbors, neighbors_values)
+            #
+            # distances = dict(zip(dists[i], self.train_y))
+            # distances = dict(sorted(distances.items()))
+            # distances_k = dict(itertools.islice(distances.items(), self.k))
+
+            # print(distances_k)
+
+            # predictions[i] = self.get_weighted_verdict(distances_k)
+            predictions[i] = self.get_weighted_verdict(distances_to_neighbors, neighbors_values)
+            # print(qw)
 
         return np.array(predictions)
 
-    def get_weighted_verdict(self, distances):
+    def get_weighted_verdict(self, distances, values):
         weights = self.__get_weights(distances)
-        values_of_neighbors = list(distances.values())
+        values_of_neighbors = list(values)
 
         return np.dot(weights, values_of_neighbors)
 
-    def __get_weights(self, distances):
-        dists_to_neighbors = list(distances.keys())
-
+    def __get_weights(self, dists_to_neighbors):
         weights = []
 
         if self.weight_type == 'rank':

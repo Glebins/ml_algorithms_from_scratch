@@ -7,36 +7,63 @@ import numpy as np
 import math
 import time
 
-from DBSCAN_clustering import *
+from bagging_regression import *
+from knn_regression import *
 
 from sklearn import *
 
 matplotlib.use('TkAgg')
 
-centers = 10
-X, y = datasets.make_blobs(n_samples=70, centers=centers, n_features=2, cluster_std=2.5, random_state=None)
-X = pd.DataFrame(X)
-X.columns = [f'col_{col}' for col in X.columns]
 
-dbscan = MyDBSCAN(eps=1.5, min_samples=3, metric='euclidean')
-points, status = dbscan.fit_predict(X, True)
+def main():
+    # data = datasets.load_diabetes(as_frame=True)
+    # X, y = data['data'], data['target']
+    #
+    # X_train, X_test, y_train, y_test = model_selection.train_test_split(X, y, test_size=0.2, random_state=42)
 
-print(pd.Series(points).value_counts().sort_index())
-print("1 - outliers, 2 - border, 3 - node")
-print(dbscan.clusters_number)
+    rs = None
 
-fig, axes = plt.subplots(1, 2, figsize=(12, 6))
+    X, y = datasets.make_regression(n_samples=170, n_features=14, n_informative=10, noise=15, random_state=rs)
+    X = pd.DataFrame(X)
+    y = pd.Series(y)
+    X.columns = [f'col_{col}' for col in X.columns]
 
-sns.scatterplot(x=X['col_0'], y=X['col_1'], hue=points, palette='viridis', ax=axes[0])
+    # X_train, X_test, y_train, y_test = model_selection.train_test_split(X, y, test_size=0.2, random_state=42)
+    #
+    # knn_reg = KNNReg()
+    #
+    # knn_reg.fit(X_train, y_train)
+    # knn_reg.predict(X_test)
 
-axes[0].set_title('2D Points Clustered')
-axes[0].set_xlabel('X')
-axes[0].set_ylabel('Y')
+    X_train, X_test, y_train, y_test = model_selection.train_test_split(X, y, test_size=20, random_state=rs)
 
-sns.scatterplot(x=X['col_0'], y=X['col_1'], hue=status, palette='viridis', ax=axes[1])
+    start_time = time.time()
 
-axes[1].set_title('2D Points Clustered')
-axes[1].set_xlabel('X')
-axes[1].set_ylabel('Y')
+    bg = MyBaggingReg(estimator=MyTreeReg(max_depth=20, max_leafs=50), max_samples=0.3, n_estimators=100, random_state=rs,
+                      oob_score='r2')
+    bg.fit(X_train, y_train)
 
-plt.show()
+    print(f"Parallel: {time.time() - start_time}")
+
+    pred = bg.predict(X_test)
+
+    print(pred.sum())
+    print(bg.oob_score_)
+
+
+    start_time = time.time()
+
+    bg = MyBaggingReg(estimator=MyTreeReg(max_depth=20, max_leafs=50), max_samples=0.3, n_estimators=100, random_state=rs,
+                      oob_score='r2', is_parallel_fit=False)
+    bg.fit(X_train, y_train)
+
+    print(f"Sequential: {time.time() - start_time}")
+
+    pred = bg.predict(X_test)
+
+    print(pred.sum())
+    print(bg.oob_score_)
+
+
+if __name__ == '__main__':
+    main()

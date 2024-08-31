@@ -97,8 +97,8 @@ def get_best_split(X: pd.DataFrame, y: pd.Series, delimiters, bins, recalc_every
             X_left = X[X[column_i] <= delim][column_i]
             X_right = X[X[column_i] > delim][column_i]
 
-            y_left = y[X_left.index]
-            y_right = y[X_right.index]
+            y_left = y[X[column_i] <= delim]
+            y_right = y[X[column_i] > delim]
 
             if X_left.empty or X_right.empty:
                 continue
@@ -189,8 +189,8 @@ class MyTreeReg:
         X_left = X[X[col_name] <= split_value]
         X_right = X[X[col_name] > split_value]
 
-        y_left = y[X_left.index]
-        y_right = y[X_right.index]
+        y_left = y[X[col_name] <= split_value]
+        y_right = y[X[col_name] > split_value]
 
         self.fi[col_name] += len(X) * gain_metric
 
