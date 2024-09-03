@@ -765,6 +765,30 @@ class MyBaggingClf:
 
         # self.post_fit(oob_df, y_index_sorted)
 
+    def predict_proba(self, X: pd.DataFrame):
+        predictions = []
+
+        for model in self.estimators:
+            predictions.append(model.predict(X))
+
+        return pd.Series(np.array(predictions).mean(axis=0))
+
+    def predict(self, X: pd.DataFrame, type):
+        if type == 'mean':
+            return (self.predict_proba(X) > 0.5) * 1
+        elif type == 'vote':
+            predictions = []
+
+            for model in self.estimators:
+                predictions.append(model.predict(X))
+
+            predictions = np.array(predictions)
+            predictions = np.apply_along_axis(lambda x: np.bincount(x, minlength=2), axis=0, arr=predictions)
+
+            return pd.Series((predictions[1] >= predictions[0]) * 1)
+        else:
+            raise ValueError('unknown type parameter')
+
     def pre_fit(self):
         if self.random_state is not None:
             random.seed(self.random_state)
