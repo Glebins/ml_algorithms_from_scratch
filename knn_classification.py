@@ -93,6 +93,10 @@ class KNNClf:
         predictions = np.zeros(num_test, dtype='int')
 
         for i in range(num_test):
+            # distances = dict(zip(dists[i], self.train_y))
+            # distances = dict(sorted(distances.items()))
+            # distances_k = dict(itertools.islice(distances.items(), self.k))
+
             distances_to_neighbors = dists[i]
             sorted_indices = distances_to_neighbors.argsort()
             distances_to_neighbors = distances_to_neighbors[sorted_indices][:self.k]
@@ -100,14 +104,14 @@ class KNNClf:
             neighbors_values = self.train_y.to_numpy()
             neighbors_values = neighbors_values[sorted_indices][:self.k]
 
-            #distances = dict(zip(dists[i], self.train_y))
-            #distances = dict(sorted(distances.items()))
-            #distances_k = dict(itertools.islice(distances.items(), self.k))
             probabilities_by_class = self.get_weighted_verdict(distances_to_neighbors, neighbors_values)
-            # todo make it great again
             probabilities_by_class = dict(sorted(probabilities_by_class.items(), key=lambda item: -item[1]))
 
-            predictions[i] = list(probabilities_by_class.keys())[0]
+            # todo delete after the course
+            if len(probabilities_by_class.values()) == 2 and probabilities_by_class[1] == probabilities_by_class[0]:
+                predictions[i] = 1
+            else:
+                predictions[i] = list(probabilities_by_class.keys())[0]
 
         return np.array(predictions)
 
@@ -118,10 +122,18 @@ class KNNClf:
         predictions = np.zeros(num_test, dtype='float')
 
         for i in range(num_test):
-            distances = dict(zip(dists[i], self.train_y))
-            distances = dict(sorted(distances.items()))
-            distances_k = dict(itertools.islice(distances.items(), self.k))
-            probabilities_by_class = self.get_weighted_verdict(distances_k)
+            # distances = dict(zip(dists[i], self.train_y))
+            # distances = dict(sorted(distances.items()))
+            # distances_k = dict(itertools.islice(distances.items(), self.k))
+
+            distances_to_neighbors = dists[i]
+            sorted_indices = distances_to_neighbors.argsort()
+            distances_to_neighbors = distances_to_neighbors[sorted_indices][:self.k]
+
+            neighbors_values = self.train_y.to_numpy()
+            neighbors_values = neighbors_values[sorted_indices][:self.k]
+
+            probabilities_by_class = self.get_weighted_verdict(distances_to_neighbors, neighbors_values)
             probabilities_by_class = dict(sorted(probabilities_by_class.items(), key=lambda item: -item[1]))
 
             predictions[i] = 0 if 1 not in probabilities_by_class else probabilities_by_class[1]

@@ -598,13 +598,13 @@ class MyKNNClf:
             dists = 1 - dists
         return dists
 
-    def get_weighted_verdict(self, distances):
-        classes = list(set(distances.values()))
+    def get_weighted_verdict(self, distances, values):
+        classes = list(set(values))
         ranks = {}
         dists = {}
 
         i = 1
-        for dist, cls in distances.items():
+        for dist, cls in zip(distances, values):
             if cls not in ranks:
                 ranks[cls] = [i]
             else:
@@ -618,7 +618,7 @@ class MyKNNClf:
             i += 1
 
         if self.weight_type == 'rank':
-            denominator = sum([1 / i for i in range(1, len(distances.values()) + 1)])
+            denominator = sum([1 / i for i in range(1, len(values) + 1)])
             probabilities_by_rank = {}
 
             for cls in classes:
@@ -628,7 +628,7 @@ class MyKNNClf:
             return probabilities_by_rank
 
         elif self.weight_type == 'distance':
-            denominator = sum([1 / i for i in distances.keys()])
+            denominator = sum([1 / i for i in distances])
             probabilities_by_distance = {}
 
             for cls in classes:
@@ -638,7 +638,7 @@ class MyKNNClf:
             return probabilities_by_distance
 
         else:
-            nearest_neighbors = np.array(list(distances.values()))
+            nearest_neighbors = np.array(list(values))
             probabilities_by_quantity = {}
 
             for cls in classes:
@@ -653,10 +653,18 @@ class MyKNNClf:
         predictions = np.zeros(num_test, dtype='int')
 
         for i in range(num_test):
-            distances = dict(zip(dists[i], self.train_y))
-            distances = dict(sorted(distances.items()))
-            distances_k = dict(itertools.islice(distances.items(), self.k))
-            probabilities_by_class = self.get_weighted_verdict(distances_k)
+            # distances = dict(zip(dists[i], self.train_y))
+            # distances = dict(sorted(distances.items()))
+            # distances_k = dict(itertools.islice(distances.items(), self.k))
+
+            distances_to_neighbors = dists[i]
+            sorted_indices = distances_to_neighbors.argsort()
+            distances_to_neighbors = distances_to_neighbors[sorted_indices][:self.k]
+
+            neighbors_values = self.train_y.to_numpy()
+            neighbors_values = neighbors_values[sorted_indices][:self.k]
+
+            probabilities_by_class = self.get_weighted_verdict(distances_to_neighbors, neighbors_values)
             probabilities_by_class = dict(sorted(probabilities_by_class.items(), key=lambda item: -item[1]))
 
             # todo delete after the course
@@ -674,10 +682,18 @@ class MyKNNClf:
         predictions = np.zeros(num_test, dtype='float')
 
         for i in range(num_test):
-            distances = dict(zip(dists[i], self.train_y))
-            distances = dict(sorted(distances.items()))
-            distances_k = dict(itertools.islice(distances.items(), self.k))
-            probabilities_by_class = self.get_weighted_verdict(distances_k)
+            # distances = dict(zip(dists[i], self.train_y))
+            # distances = dict(sorted(distances.items()))
+            # distances_k = dict(itertools.islice(distances.items(), self.k))
+
+            distances_to_neighbors = dists[i]
+            sorted_indices = distances_to_neighbors.argsort()
+            distances_to_neighbors = distances_to_neighbors[sorted_indices][:self.k]
+
+            neighbors_values = self.train_y.to_numpy()
+            neighbors_values = neighbors_values[sorted_indices][:self.k]
+
+            probabilities_by_class = self.get_weighted_verdict(distances_to_neighbors, neighbors_values)
             probabilities_by_class = dict(sorted(probabilities_by_class.items(), key=lambda item: -item[1]))
 
             predictions[i] = 0 if 1 not in probabilities_by_class else probabilities_by_class[1]
@@ -721,11 +737,14 @@ class MyKNNClf:
 
 
 class MyBaggingClf:
-    def __init__(self, estimator=None, n_estimators=10, max_samples=1.0, random_state=42):
+    def __init__(self, estimator=None, n_estimators=10, max_samples=1.0, random_state=42, oob_score=None):
         self.estimator = estimator
         self.n_estimators = n_estimators
         self.max_samples = max_samples
         self.random_state = random_state
+
+        self.oob_metric_type = oob_score
+        self.oob_score_ = 0
 
         self.estimators = []
 
@@ -740,11 +759,11 @@ class MyBaggingClf:
         y_index_sorted.index = range(len(y))
 
         for i in range(self.n_estimators):
-            sample_rows_idx_i = random.choices(range(len(X.index.values.tolist())),
-                                               k=round(X.shape[0] * self.max_samples))
+            sample_rows_idx_i = random.choices(range(len(X_index_sorted.index.values.tolist())),
+                                               k=round(X_index_sorted.shape[0] * self.max_samples))
             sample_rows.append(sample_rows_idx_i)
 
-        # oob_df = pd.DataFrame(0, index=X_index_sorted.index, columns=['value', 'count'])
+        oob_df = pd.DataFrame(0, index=X_index_sorted.index, columns=['value', 'count'])
 
         for i in range(self.n_estimators):
             sample_rows_i = sample_rows[i]
@@ -757,19 +776,21 @@ class MyBaggingClf:
 
             self.estimators.append(model_i)
 
-            # X_oob_i = X_index_sorted.iloc[~X_index_sorted.index.isin(sample_rows_i)]
-            # prediction_oob = model_i.predict(X_oob_i)
-            #
-            # oob_df.loc[X_oob_i.index.values, 'value'] += prediction_oob
-            # oob_df.loc[X_oob_i.index.values, 'count'] += 1
+            X_oob_i = X_index_sorted.iloc[~X_index_sorted.index.isin(sample_rows_i)]
+            # print(X_oob_i.shape)
 
-        # self.post_fit(oob_df, y_index_sorted)
+            prediction_oob = model_i.predict(X_oob_i)
+
+            oob_df.loc[X_oob_i.index.values, 'value'] += prediction_oob
+            oob_df.loc[X_oob_i.index.values, 'count'] += 1
+
+        self.post_fit(oob_df, y_index_sorted)
 
     def predict_proba(self, X: pd.DataFrame):
         predictions = []
 
         for model in self.estimators:
-            predictions.append(model.predict(X))
+            predictions.append(model.predict_proba(X))
 
         return pd.Series(np.array(predictions).mean(axis=0))
 
@@ -795,11 +816,55 @@ class MyBaggingClf:
         self.estimators.clear()
 
     def post_fit(self, oob_df: pd.DataFrame, y_index_sorted):
-        pass
-        # oob_prediction_mean = oob_df['value'] / oob_df['count']
-        # oob_prediction_mean = oob_prediction_mean.dropna()
-        # y_index_sorted = y_index_sorted[oob_prediction_mean.index]
-        # self.oob_score_ = self.__get_metric_value(oob_prediction_mean, y_index_sorted)
+        oob_prediction_mean = oob_df['value'] / oob_df['count']
+        oob_prediction_mean = oob_prediction_mean.dropna()
+        y_index_sorted = y_index_sorted[oob_prediction_mean.index]
+        self.oob_score_ = self.__get_metric_value(oob_prediction_mean, y_index_sorted)
+
+    @staticmethod
+    def calculate_roc_auc_column_helper(row, scores):
+        score_i = row[0]
+        ground_truth_i = row[1]
+
+        if ground_truth_i == 1:
+            return 0
+
+        num_positive_scores_bigger = scores[(scores['probability'] > score_i) & (scores['truth'] == 1)].shape[0]
+        num_positive_scores_equal = scores[(scores['probability'] == score_i) &
+                                           (scores['truth'] == 1)].shape[0]
+        return num_positive_scores_bigger + num_positive_scores_equal / 2
+
+    def __get_metric_value(self, y_predicted, y_original):
+        y_labels = pd.Series((y_predicted > 0.5) * 1)
+        TP = pd.Series(y_original[y_original == 1] == y_labels[y_original == 1]).sum()
+        TN = pd.Series(y_original[y_original == 0] == y_labels[y_original == 0]).sum()
+        FP = pd.Series(y_original[y_original == 0] != y_labels[y_original == 0]).sum()
+        FN = pd.Series(y_original[y_original == 1] != y_labels[y_original == 1]).sum()
+
+        if self.oob_metric_type == 'accuracy':
+            return pd.Series(y_labels == y_original).mean()
+        elif self.oob_metric_type == 'precision':
+            return TP / (TP + FP)
+        elif self.oob_metric_type == 'recall':
+            return TP / (TP + FN)
+        elif self.oob_metric_type == 'f1':
+            return 2 * TP / (2 * TP + FP + FN)
+        elif self.oob_metric_type == 'roc_auc':
+            scores = pd.DataFrame()
+            scores['probability'] = y_predicted.round(10)
+            scores['truth'] = y_original
+            scores = scores.sort_values(by='probability', ascending=False)
+            scores['roc_auc_param'] = scores.apply(self.calculate_roc_auc_column_helper, axis=1, args=(scores,))
+
+            negative_classes_number, positive_classes_number = [scores['truth'].value_counts()[i] for i in range(2)]
+            roc_auc_sum = scores['roc_auc_param'].sum()
+
+            return roc_auc_sum / (negative_classes_number * positive_classes_number)
+        elif self.oob_metric_type is None:
+            return None
+        else:
+            raise ValueError('Unknown type of metric. Use one of the following: accuracy, precision, recall, f1, '
+                             'roc_auc')
 
     def __str__(self):
         res_str = f"{self.__class__.__name__} class: "
