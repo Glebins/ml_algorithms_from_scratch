@@ -5,9 +5,11 @@ from decision_tree_regression import *
 
 
 class MyBoostReg:
-    def __init__(self, n_estimators=10, learning_rate=0.1, max_depth=5, min_samples_split=2, max_leafs=20, bins=16):
+    def __init__(self, n_estimators=10, learning_rate=0.1, max_depth=5, min_samples_split=2, max_leafs=20,
+                 bins=16, loss='MSE'):
         self.n_estimators = n_estimators
         self.learning_rate = learning_rate
+        self.loss_type = loss
 
         self.max_depth = max_depth
         self.min_samples_split = min_samples_split
@@ -17,7 +19,7 @@ class MyBoostReg:
         self.pred_0 = None
         self.trees = []
 
-    def fit(self, X: pd.DataFrame, y: pd.Series):
+    def fit(self, X: pd.DataFrame, y: pd.Series, verbose=False):
         self.pred_0 = y.mean()
 
         X_index_sorted = X.copy()

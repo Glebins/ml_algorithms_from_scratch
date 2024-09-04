@@ -808,8 +808,8 @@ class MyBaggingReg:
 
         self.oob_metric_type = oob_score
         self.is_parallel_fit = is_parallel_fit
-        self.oob_score_ = 0
 
+        self.oob_score_ = 0
         self.estimators = []
 
     def fit(self, X: pd.DataFrame, y: pd.Series):

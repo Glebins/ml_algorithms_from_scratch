@@ -737,54 +737,24 @@ class MyKNNClf:
 
 
 class MyBaggingClf:
-    def __init__(self, estimator=None, n_estimators=10, max_samples=1.0, random_state=42, oob_score=None):
+    def __init__(self, estimator=None, n_estimators=10, max_samples=1.0, random_state=42, oob_score=None,
+                 is_parallel_fit=True):
         self.estimator = estimator
         self.n_estimators = n_estimators
         self.max_samples = max_samples
         self.random_state = random_state
 
         self.oob_metric_type = oob_score
-        self.oob_score_ = 0
+        self.is_parallel_fit = is_parallel_fit
 
+        self.oob_score_ = 0
         self.estimators = []
 
     def fit(self, X: pd.DataFrame, y: pd.Series):
-        self.pre_fit()
-
-        sample_rows = []
-
-        X_index_sorted = X.copy()
-        y_index_sorted = y.copy()
-        X_index_sorted.index = range(len(X))
-        y_index_sorted.index = range(len(y))
-
-        for i in range(self.n_estimators):
-            sample_rows_idx_i = random.choices(range(len(X_index_sorted.index.values.tolist())),
-                                               k=round(X_index_sorted.shape[0] * self.max_samples))
-            sample_rows.append(sample_rows_idx_i)
-
-        oob_df = pd.DataFrame(0, index=X_index_sorted.index, columns=['value', 'count'])
-
-        for i in range(self.n_estimators):
-            sample_rows_i = sample_rows[i]
-            model_i = copy.deepcopy(self.estimator)
-
-            X_sample = X.iloc[sample_rows_i]
-            y_sample = y.iloc[sample_rows_i]
-
-            model_i.fit(X_sample, y_sample)
-
-            self.estimators.append(model_i)
-
-            X_oob_i = X_index_sorted.iloc[~X_index_sorted.index.isin(sample_rows_i)]
-            # print(X_oob_i.shape)
-
-            prediction_oob = model_i.predict(X_oob_i)
-
-            oob_df.loc[X_oob_i.index.values, 'value'] += prediction_oob
-            oob_df.loc[X_oob_i.index.values, 'count'] += 1
-
-        self.post_fit(oob_df, y_index_sorted)
+        if self.is_parallel_fit:
+            self.fit_parallel(X, y)
+        else:
+            self.fit_sequential(X, y)
 
     def predict_proba(self, X: pd.DataFrame):
         predictions = []
@@ -810,6 +780,105 @@ class MyBaggingClf:
         else:
             raise ValueError('unknown type parameter')
 
+    def fit_sequential(self, X: pd.DataFrame, y: pd.Series):
+        self.pre_fit()
+
+        sample_rows = []
+
+        X_index_sorted = X.copy()
+        y_index_sorted = y.copy()
+        X_index_sorted.index = range(len(X))
+        y_index_sorted.index = range(len(y))
+
+        for i in range(self.n_estimators):
+            sample_rows_idx_i = random.choices(range(len(X_index_sorted.index.values.tolist())),
+                                               k=round(X_index_sorted.shape[0] * self.max_samples))
+            sample_rows.append(sample_rows_idx_i)
+
+        oob_df = pd.DataFrame(0.0, index=X_index_sorted.index, columns=['value', 'count'])
+
+        for i in range(self.n_estimators):
+            sample_rows_i = sample_rows[i]
+            model_i = copy.deepcopy(self.estimator)
+
+            X_sample = X.iloc[sample_rows_i]
+            y_sample = y.iloc[sample_rows_i]
+
+            model_i.fit(X_sample, y_sample)
+
+            self.estimators.append(model_i)
+
+            X_oob_i = X_index_sorted.iloc[~X_index_sorted.index.isin(sample_rows_i)]
+
+            prediction_oob = model_i.predict_proba(X_oob_i)
+
+            oob_df.loc[X_oob_i.index.values, 'value'] += prediction_oob
+            oob_df.loc[X_oob_i.index.values, 'count'] += 1
+
+        self.post_fit(oob_df, y_index_sorted)
+
+    def fit_parallel(self, X: pd.DataFrame, y: pd.Series):
+        self.pre_fit()
+
+        num_cores = multiprocessing.cpu_count()
+        data = (X, y)
+        oob_df = self._fit_trees_in_parallel(data, num_cores)
+
+        y_index_sorted = y.copy()
+        y_index_sorted.index = range(len(y))
+
+        self.post_fit(oob_df, y_index_sorted)
+
+    def _fit_trees_in_parallel(self, data, num_cores):
+        with multiprocessing.Pool(num_cores) as pool:
+            models = pool.map(self._fit_tree, [data] * self.n_estimators)
+            oob_df = self._combine_parameters(data, models)
+        return oob_df
+
+    def _fit_tree(self, data):
+        X, y = data
+
+        X_index_sorted = X.copy()
+        y_index_sorted = y.copy()
+        X_index_sorted.index = range(len(X))
+        y_index_sorted.index = range(len(y))
+
+        sample_rows_i = random.choices(range(len(X.index.values.tolist())),
+                                       k=round(X.shape[0] * self.max_samples))
+
+        model_i = copy.deepcopy(self.estimator)
+
+        X_sample = X.iloc[sample_rows_i]
+        y_sample = y.iloc[sample_rows_i]
+
+        model_i.fit(X_sample, y_sample)
+
+        self.estimators.append(model_i)
+
+        # X_oob_i = X_index_sorted.iloc[~X_index_sorted.index.isin(sample_rows_i)]
+        # prediction_oob = model_i.predict(X_oob_i)
+        #
+        # oob_df.loc[X_oob_i.index.values, 'value'] += prediction_oob
+        # oob_df.loc[X_oob_i.index.values, 'count'] += 1
+
+        X_oob_i = X_index_sorted.iloc[~X_index_sorted.index.isin(sample_rows_i)]
+        prediction_oob = model_i.predict_proba(X_oob_i)
+
+        return model_i, X_oob_i.index.values, prediction_oob
+
+    def _combine_parameters(self, data, models):
+        X, y = data
+        models, oob_indices_values, predictions_oob = [[model[i] for model in models] for i in range(3)]
+        self.estimators = models
+
+        oob_df = pd.DataFrame(0.0, index=range(len(X)), columns=['value', 'count'])
+
+        for index_values_i, prediction_oob_i in zip(oob_indices_values, predictions_oob):
+            oob_df.loc[index_values_i, 'value'] += prediction_oob_i
+            oob_df.loc[index_values_i, 'count'] += 1
+
+        return oob_df
+
     def pre_fit(self):
         if self.random_state is not None:
             random.seed(self.random_state)
@@ -823,8 +892,8 @@ class MyBaggingClf:
 
     @staticmethod
     def calculate_roc_auc_column_helper(row, scores):
-        score_i = row[0]
-        ground_truth_i = row[1]
+        score_i = row.iloc[0]
+        ground_truth_i = row.iloc[1]
 
         if ground_truth_i == 1:
             return 0
