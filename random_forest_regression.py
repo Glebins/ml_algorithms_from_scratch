@@ -68,7 +68,8 @@ class MyForestReg:
         for i in range(self.n_estimators):
             cols_idx = random.sample(range(len(X_index_sorted.columns.values.tolist())),
                                      round(X_index_sorted.shape[1] * self.max_features))
-            rows_idx = random.sample(range(X_index_sorted.shape[0]), round(X_index_sorted.shape[0] * self.max_samples))
+            rows_idx = random.sample(range(X_index_sorted.shape[0]),
+                                     round(X_index_sorted.shape[0] * self.max_samples))
 
             tree_i = MyTreeReg(max_depth=self.max_depth, min_samples_split=self.min_samples_split,
                                max_leafs=self.max_leafs, bins=self.bins)
@@ -124,7 +125,8 @@ class MyForestReg:
 
         cols_idx = random.sample(range(len(X_index_sorted.columns.values.tolist())),
                                  round(X_index_sorted.shape[1] * self.max_features))
-        rows_idx = random.sample(range(X_index_sorted.shape[0]), round(X_index_sorted.shape[0] * self.max_samples))
+        rows_idx = random.sample(range(X_index_sorted.shape[0]),
+                                 round(X_index_sorted.shape[0] * self.max_samples))
 
         tree_i = MyTreeReg(max_depth=self.max_depth, min_samples_split=self.min_samples_split,
                            max_leafs=self.max_leafs, bins=self.bins)

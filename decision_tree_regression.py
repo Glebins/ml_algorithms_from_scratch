@@ -165,6 +165,7 @@ class MyTreeReg:
         self.fi = {}
 
         self.__delimiters = None
+        self.__elements_in_leaves = []
 
     def is_node_a_leaf(self, X: pd.DataFrame, y: pd.Series, node: Tree):
         if node.depth == 0:
@@ -182,7 +183,6 @@ class MyTreeReg:
     def __handle_node_as_node(self, X: pd.DataFrame, y: pd.Series, node: Tree):
         col_name, split_value, gain_metric = get_best_split(X, y, self.__delimiters, self.bins, self.recalc_every_step)
 
-        # make a human check (the same elements in bins)
         if col_name is None:
             return self.__handle_node_as_leaf(X, y, node)
 
@@ -218,28 +218,31 @@ class MyTreeReg:
 
         if not self.recalc_every_step:
             self.__delimiters = split_into_delimiters(X, self.bins)
+        self.__elements_in_leaves.clear()
 
     def post_fit(self, X: pd.DataFrame):
         for col_i in X:
             self.fi[col_i] /= len(X)
 
-    def fitting_process(self, X: pd.DataFrame, y: pd.Series, node):
+    def fitting_process(self, X: pd.DataFrame, y: pd.Series, node, do_write_elements_in_leaves):
         processing_result = self.handle_node(X, y, node)
         if processing_result is None:
+            if do_write_elements_in_leaves:
+                self.__elements_in_leaves.append(y.index.values)
             return
 
         X_left, y_left, X_right, y_right = processing_result
 
         self.remaining_leaves += 1
-        self.fitting_process(X_left, y_left, node.left)
+        self.fitting_process(X_left, y_left, node.left, do_write_elements_in_leaves)
         self.remaining_leaves -= 1
-        self.fitting_process(X_right, y_right, node.right)
+        self.fitting_process(X_right, y_right, node.right, do_write_elements_in_leaves)
 
-    def fit(self, X: pd.DataFrame, y: pd.Series):
+    def fit(self, X: pd.DataFrame, y: pd.Series, do_write_elements_in_leaves=False):
         node_start = self.tree
 
         self.pre_fit(X)
-        self.fitting_process(X, y, node_start)
+        self.fitting_process(X, y, node_start, do_write_elements_in_leaves)
         self.post_fit(X)
 
     def predict(self, X: pd.DataFrame):
@@ -259,6 +262,9 @@ class MyTreeReg:
 
     def print_tree(self):
         print(self.tree)
+
+    def get_elements_in_leaves(self):
+        return self.__elements_in_leaves
 
     def __str__(self):
         res_str = f"{self.__class__.__name__} class: "
