@@ -28,7 +28,7 @@ class MyBoostReg:
         self.best_score = 0
         self.fi = {}
 
-    def fit(self, X: pd.DataFrame, y: pd.Series, X_eval=None, y_eval=None, early_stopping=None, verbose=False):
+    def fit(self, X: pd.DataFrame, y: pd.Series, X_eval=None, y_eval=None, early_stopping=None, verbose=None):
         self.pred_0 = self.calculate_best_prediction(y)
         self.best_score = 0
         self.trees.clear()
@@ -58,10 +58,9 @@ class MyBoostReg:
 
         current_pred = pd.Series([self.pred_0] * len(y))
         eval_predict = pd.Series([self.pred_0] * len(y_eval)) if doing_early_stopping else 0
-        sum_pred_predictions = current_pred
+        sum_prev_predictions = current_pred
 
-        current_sum_of_leaves = 0
-        early_stopping_flag = False
+        current_amount_of_leaves = 0
 
         for i in range(1, self.n_estimators + 1):
             tree_i = MyTreeReg(max_depth=self.max_depth, min_samples_split=self.min_samples_split,
@@ -78,50 +77,50 @@ class MyBoostReg:
             X_train_i = X.iloc[rows_idx, cols_idx]
             X_train_i.index = range(X_train_i.shape[0])
 
-            grad = self.calculate_gradient(sum_pred_predictions, y)
+            grad = self.calculate_gradient(sum_prev_predictions, y)
             grad_part = grad.iloc[rows_idx]
             grad_part.index = range(grad_part.shape[0])
 
             tree_i.fit(X_train_i, -grad_part, do_write_elements_in_leaves=True)
 
-            remainder = y - sum_pred_predictions
+            remainder = y - sum_prev_predictions
             remainder_part = remainder.iloc[rows_idx]
             remainder_part.index = range(remainder_part.shape[0])
 
-            remainder_part += self.reg_coef * current_sum_of_leaves
-            current_sum_of_leaves += tree_i.leafs_cnt
+            remainder_part += self.reg_coef * current_amount_of_leaves
+            current_amount_of_leaves += tree_i.leafs_cnt
 
             self.recalculate_leaves_values(tree_i.tree, tree_i.get_elements_in_leaves(), remainder_part)
 
             current_pred = pd.Series(tree_i.predict(X))
 
             if callable(self.learning_rate):
-                sum_pred_predictions += self.learning_rate(i) * current_pred
+                sum_prev_predictions += self.learning_rate(i) * current_pred
             else:
-                sum_pred_predictions += self.learning_rate * current_pred
+                sum_prev_predictions += self.learning_rate * current_pred
 
             self.trees.append(tree_i)
 
             for col_i in self.fi.keys():
                 self.fi[col_i] += (tree_i.fi[col_i] if col_i in tree_i.fi else 0) * len(X_train_i) / len(X)
 
-            loss_value = self.calculate_metric(sum_pred_predictions, y, self.loss_type)
+            loss_value = self.calculate_metric(sum_prev_predictions, y, self.loss_type)
 
             metric_value = None
             if self.metric_type is not None:
-                metric_value = self.calculate_metric(sum_pred_predictions, y, self.metric_type)
+                metric_value = self.calculate_metric(sum_prev_predictions, y, self.metric_type)
 
             validation_value = None
             validation_metric = None
             if doing_early_stopping:
                 current_eval_pred = pd.Series(tree_i.predict(X_eval))
+
                 if callable(self.learning_rate):
                     eval_predict += self.learning_rate(i) * current_eval_pred
                 else:
                     eval_predict += self.learning_rate * current_eval_pred
 
                 validation_metric = self.metric_type if self.metric_type is not None else self.loss_type
-
                 validation_value = self.calculate_metric(eval_predict, y_eval, validation_metric)
 
                 if self.__is_non_improvement(prev_score_valid, validation_value, validation_metric):
@@ -132,21 +131,20 @@ class MyBoostReg:
                 prev_score_valid = validation_value
 
                 if steps_of_non_improvement_valid == early_stopping:
-                    if verbose:
-                        print(f"Validation = {validation_value}, early stopping")
+                    if verbose is not None:
+                        print(f"---------------Validation = {validation_value}, early stopping---------------")
                     del self.trees[-early_stopping:]
                     self.best_score = last_best_score
-                    early_stopping_flag = True
                     break
 
-            if verbose and (i % verbose == 0 or i == self.n_estimators):
+            if verbose is not None and (i % verbose == 0 or i == self.n_estimators):
                 self.__debug_while_fit(i, loss_value, metric_value, validation_metric, validation_value)
 
-        if not early_stopping_flag:
+        else:
             if self.metric_type is not None:
-                self.best_score = self.calculate_metric(sum_pred_predictions, y, self.metric_type)
+                self.best_score = self.calculate_metric(sum_prev_predictions, y, self.metric_type)
             else:
-                self.best_score = self.calculate_metric(sum_pred_predictions, y, self.loss_type)
+                self.best_score = self.calculate_metric(sum_prev_predictions, y, self.loss_type)
 
         X.index = train_index
         y.index = train_index
@@ -249,7 +247,7 @@ class MyBoostReg:
         for key, value in self.__dict__.items():
             if key.startswith("_"):
                 continue
-            res_str += f"{key}={value}, "
+            res_str += f"{key} = {value}, "
 
         res_str = res_str[:-2]
         return res_str
