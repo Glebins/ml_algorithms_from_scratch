@@ -57,11 +57,6 @@ class MyKMeans:
                     cluster_i_new_center.append(X_points_in_cluster[col_i].mean())
                 new_cluster_centers_.append(cluster_i_new_center)
 
-            # print(new_cluster_centers_)
-            # print(self.cluster_centers_)
-            # print(self.calculate_WCSS(X, points_by_clusters))
-            # print("________________________")
-
             if np.array_equal(np.array(self.cluster_centers_).round(3), np.array(new_cluster_centers_).round(3)):
                 self.inertia_ = self.calculate_WCSS(X, points_by_clusters)
                 break

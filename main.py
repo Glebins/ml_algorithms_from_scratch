@@ -2,34 +2,36 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib
 
-import pandas as pd
-import numpy as np
-import math
-import time
+from DBSCAN_clustering import *
 
 from sklearn import *
 
-from gradient_boosting_classification import *
-from principal_component_analysis import *
-
 matplotlib.use('TkAgg')
 
+centers = 3
+X, y = datasets.make_blobs(n_samples=70, centers=centers, n_features=2, cluster_std=2.5, random_state=None)
+X = pd.DataFrame(X)
+X.columns = [f'col_{col}' for col in X.columns]
 
-def main():
-    X, y = datasets.make_classification(n_samples=1500, n_features=10, n_informative=3, random_state=42)
-    X = pd.DataFrame(X)
-    y = pd.Series(y)
-    X.columns = [f'col_{col}' for col in X.columns]
+dbscan = MyDBSCAN(eps=1.5, min_samples=3, metric='euclidean')
+points, status = dbscan.fit_predict(X, True)
 
-    # X_train, X_test, y_train, y_test = model_selection.train_test_split(X, y, test_size=300, random_state=42)
-    X_train, X_test, y_train, y_test = X[:1200], X[1200:], y[:1200], y[1200:]
+print(pd.Series(points).value_counts().sort_index())
+print("1 - outliers, 2 - border, 3 - node")
+print(dbscan.clusters_number)
 
-    boost_clf = MyBoostClf(n_estimators=20, learning_rate=0.5, metric='precision', reg=0.001,
-                           max_features=0.3, max_samples=0.3, max_depth=3, bins=8)
-    boost_clf.fit(X_train, y_train, X_eval=X_test, y_eval=y_test, early_stopping=2, verbose=1)
+fig, axes = plt.subplots(1, 2, figsize=(12, 6))
 
-    print(boost_clf.best_score)
+sns.scatterplot(x=X['col_0'], y=X['col_1'], hue=points, palette='viridis', ax=axes[0])
 
+axes[0].set_title('2D Points Clustered')
+axes[0].set_xlabel('X')
+axes[0].set_ylabel('Y')
 
-if __name__ == '__main__':
-    main()
+sns.scatterplot(x=X['col_0'], y=X['col_1'], hue=status, palette='viridis', ax=axes[1])
+
+axes[1].set_title('2D Points Clustered')
+axes[1].set_xlabel('X')
+axes[1].set_ylabel('Y')
+
+plt.show()

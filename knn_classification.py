@@ -1,6 +1,5 @@
 import pandas as pd
 import numpy as np
-import itertools
 
 
 class KNNClf:
@@ -93,9 +92,6 @@ class KNNClf:
         predictions = np.zeros(num_test, dtype='int')
 
         for i in range(num_test):
-            # distances = dict(zip(dists[i], self.train_y))
-            # distances = dict(sorted(distances.items()))
-            # distances_k = dict(itertools.islice(distances.items(), self.k))
 
             distances_to_neighbors = dists[i]
             sorted_indices = distances_to_neighbors.argsort()
@@ -107,12 +103,6 @@ class KNNClf:
             probabilities_by_class = self.get_weighted_verdict(distances_to_neighbors, neighbors_values)
             probabilities_by_class = dict(sorted(probabilities_by_class.items(), key=lambda item: -item[1]))
 
-            # todo delete after the course
-            if len(probabilities_by_class.values()) == 2 and probabilities_by_class[1] == probabilities_by_class[0]:
-                predictions[i] = 1
-            else:
-                predictions[i] = list(probabilities_by_class.keys())[0]
-
         return np.array(predictions)
 
     def predict_proba(self, test_X):
@@ -122,9 +112,6 @@ class KNNClf:
         predictions = np.zeros(num_test, dtype='float')
 
         for i in range(num_test):
-            # distances = dict(zip(dists[i], self.train_y))
-            # distances = dict(sorted(distances.items()))
-            # distances_k = dict(itertools.islice(distances.items(), self.k))
 
             distances_to_neighbors = dists[i]
             sorted_indices = distances_to_neighbors.argsort()

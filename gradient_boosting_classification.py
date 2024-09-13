@@ -1,8 +1,5 @@
 import random
 
-import numpy as np
-import pandas as pd
-
 from decision_tree_regression import *
 
 
@@ -215,7 +212,7 @@ class MyBoostClf:
             scores['roc_auc_param'] = scores.apply(MyBoostClf.calculate_roc_auc_column_helper,
                                                    axis=1, args=(scores,))
 
-            negative_classes_number, positive_classes_number =\
+            negative_classes_number, positive_classes_number = \
                 [scores['truth'].value_counts()[i] for i in range(2)]
             roc_auc_sum = scores['roc_auc_param'].sum()
 

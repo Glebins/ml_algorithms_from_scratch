@@ -54,17 +54,7 @@ class KNNReg:
             neighbors_values = self.train_y.to_numpy()
             neighbors_values = neighbors_values[sorted_indices][:self.k]
 
-            # print(distances_to_neighbors, neighbors_values)
-            #
-            # distances = dict(zip(dists[i], self.train_y))
-            # distances = dict(sorted(distances.items()))
-            # distances_k = dict(itertools.islice(distances.items(), self.k))
-
-            # print(distances_k)
-
-            # predictions[i] = self.get_weighted_verdict(distances_k)
             predictions[i] = self.get_weighted_verdict(distances_to_neighbors, neighbors_values)
-            # print(qw)
 
         return np.array(predictions)
 

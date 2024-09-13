@@ -80,12 +80,6 @@ def get_best_split(X: pd.DataFrame, y: pd.Series, delimiters, bins, recalc_every
     S_0 = criterion_function(y)
 
     for column_i in X:
-        # unique_values = sorted(X[column_i].unique())
-        # delimiters = []
-        # for i in range(len(unique_values) - 1):
-        #     mean_i = (unique_values[i] + unique_values[i + 1]) / 2
-        #     delimiters.append(mean_i)
-
         if recalc_every_step:
             delimiters = split_into_delimiters(X, bins)
 
@@ -154,10 +148,6 @@ class MyTreeReg:
         self.max_leafs = max_leafs
         self.bins = bins
         self.recalc_every_step = recalc_every_step
-
-        # todo delete after the course
-        if self.bins is None:
-            self.recalc_every_step = True
 
         self.remaining_leaves = 2
         self.leafs_cnt = 0
